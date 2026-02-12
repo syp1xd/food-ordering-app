@@ -1,0 +1,22 @@
+# General
+.DS_Store
+node_modules/
+venv/
+__pycache__/
+*.pyc
+.env
+.env.local
+
+# Backend
+backend/orders.db
+backend/__pycache__/
+backend/*.pyc
+
+# Frontend
+frontend/dist/
+frontend/.vite/
+frontend/*.tsbuildinfo
+
+# IDE
+.vscode/
+.idea/
