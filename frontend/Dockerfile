@@ -10,5 +10,5 @@ WORKDIR /app
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules
-EXPOSE 5173
-CMD ["npm", "run", "preview", "--", "--host"]
+EXPOSE 4173
+CMD ["npm", "run", "preview"]
