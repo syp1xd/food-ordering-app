@@ -6,7 +6,7 @@ import { OrdersList } from './components/OrdersList';
 import { CartIcon } from './components/CartIcon';
 import { useCart } from './hooks/useCart';
 
-type View = 'menu' | 'orders';
+type View = 'menu' | 'orders' | 'tracker';
 
 function App() {
   const [activeOrderId, setActiveOrderId] = useState<number | null>(null);
