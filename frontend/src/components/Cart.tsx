@@ -10,14 +10,28 @@ interface CartProps {
 export const Cart: React.FC<CartProps> = ({ onOrderPlaced, onClose }) => {
   const { cart, removeFromCart, clearCart, total } = useCart();
   const [isOrdering, setIsOrdering] = useState(false);
+  const [customerName, setCustomerName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
+  const [showValidation, setShowValidation] = useState(false);
+
+  const trimmedName = customerName.trim();
+  const trimmedPhone = phone.trim();
+  const trimmedAddress = address.trim();
+
+  const isFormValid = trimmedName.length > 0 && trimmedPhone.length > 0 && trimmedAddress.length > 0;
 
   const handleCheckout = async () => {
+    if (!isFormValid) {
+      setShowValidation(true);
+      return;
+    }
     setIsOrdering(true);
     try {
       const order = await ordersApi.create({
-        customer_name: 'Guest User',
-        phone: '555-0123',
-        address: '123 Main St',
+        customer_name: trimmedName,
+        phone: trimmedPhone,
+        address: trimmedAddress,
         items: cart.map((item) => ({
           menu_item_id: item.menu_item.id,
           quantity: item.quantity,
@@ -25,6 +39,10 @@ export const Cart: React.FC<CartProps> = ({ onOrderPlaced, onClose }) => {
       });
 
       clearCart();
+      setCustomerName('');
+      setPhone('');
+      setAddress('');
+      setShowValidation(false);
       onOrderPlaced(order.id);
     } catch (error) {
       console.error('Checkout failed:', error);
@@ -58,6 +76,56 @@ export const Cart: React.FC<CartProps> = ({ onOrderPlaced, onClose }) => {
       </div>
 
       <div className="cart-items">
+        <div className="cart-form">
+          <h3>Delivery details</h3>
+          <div className="field">
+            <label>
+              Name
+              <input
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                placeholder="Your name"
+                autoComplete="name"
+              />
+            </label>
+            {showValidation && trimmedName.length === 0 && (
+              <div className="field-error">Please enter your name</div>
+            )}
+          </div>
+
+          <div className="field">
+            <label>
+              Phone
+              <input
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="Phone number"
+                autoComplete="tel"
+                inputMode="tel"
+              />
+            </label>
+            {showValidation && trimmedPhone.length === 0 && (
+              <div className="field-error">Please enter your phone number</div>
+            )}
+          </div>
+
+          <div className="field">
+            <label>
+              Address
+              <textarea
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="Delivery address"
+                rows={3}
+                autoComplete="street-address"
+              />
+            </label>
+            {showValidation && trimmedAddress.length === 0 && (
+              <div className="field-error">Please enter your address</div>
+            )}
+          </div>
+        </div>
+
         {cart.map((item) => (
           <div key={item.menu_item.id} className="cart-item slide-in">
             <div className="item-info">
@@ -97,7 +165,7 @@ export const Cart: React.FC<CartProps> = ({ onOrderPlaced, onClose }) => {
         <button 
           className="checkout-btn"
           onClick={handleCheckout}
-          disabled={isOrdering}
+          disabled={isOrdering || !isFormValid}
         >
           {isOrdering ? 'Placing Order...' : 'Place Order'}
         </button>
