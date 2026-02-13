@@ -5,11 +5,16 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM node:18-alpine
-WORKDIR /app
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/vite.config.ts ./vite.config.ts
-COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/node_modules ./node_modules
-EXPOSE 4173
-CMD ["npm", "run", "preview"]
+FROM nginx:1.27-alpine
+
+# envsubst for templating nginx config with PORT/BACKEND_URL
+RUN apk add --no-cache gettext
+
+WORKDIR /usr/share/nginx/html
+COPY --from=builder /app/dist ./
+
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
+
+ENV BACKEND_URL=http://localhost:8000
+
+CMD ["sh", "-c", "envsubst '$$PORT $$BACKEND_URL' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'" ]
