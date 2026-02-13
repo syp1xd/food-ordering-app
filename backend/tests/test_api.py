@@ -1,32 +1,32 @@
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app
-from app.database import engine, get_db
-from app import models
-from sqlalchemy.orm import sessionmaker
+from app.database import engine, Base
+import asyncio
 import sys
 import os
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-def override_get_db():
-    db = TestingSessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-app.dependency_overrides[get_db] = override_get_db
-
 client = TestClient(app)
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(scope="session", autouse=True)
 def setup_database():
-    models.Base.metadata.create_all(bind=engine)
+    """Initialize and clean database for tests"""
+    import os
+    os.environ["TESTING"] = "1"
+    # Drop and recreate all tables
+    async def init_db():
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+            await conn.run_sync(Base.metadata.create_all)
+    asyncio.run(init_db())
     yield
-    models.Base.metadata.drop_all(bind=engine)
+    # Clean up after all tests
+    async def cleanup():
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+    asyncio.run(cleanup())
 
 def test_read_root():
     response = client.get("/")
