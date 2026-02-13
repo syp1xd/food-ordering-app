@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { MenuList } from './components/MenuList';
 import { Cart } from './components/Cart';
 import { OrderTracker } from './components/OrderTracker';
-import { OrdersList } from './components/OrdersList';
+import { OrdersList } from './components/OrdersList.tsx';
 import { CartIcon } from './components/CartIcon';
 import { useCart } from './hooks/useCart';
 
@@ -16,7 +16,7 @@ function App() {
   const handleOrderPlaced = (orderId: number) => {
     setActiveOrderId(orderId);
     setCartOpen(false);
-    setCurrentView('orders'); // Switch to orders view after placing
+    setCurrentView('tracker');
   };
 
   const handleSelectOrder = (orderId: number) => {
@@ -29,26 +29,20 @@ function App() {
     setCurrentView('orders');
   };
 
-
-
   return (
     <>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
+      <header className="header-nav fade-in">
+        <div className="brand">
           <h1>Food Delivery</h1>
           <p>Order management demo</p>
         </div>
-        <nav style={{ display: 'flex', gap: '1rem' }}>
+        <nav className="nav-buttons">
           <button
             onClick={() => {
               setCurrentView('menu');
               setActiveOrderId(null);
             }}
-            style={{
-              background: currentView === 'menu' ? '#646cff' : 'transparent',
-              color: currentView === 'menu' ? 'white' : '#646cff',
-              border: currentView === 'menu' ? 'none' : '1px solid #646cff',
-            }}
+            className={currentView === 'menu' ? 'primary' : 'outline'}
           >
             Menu
           </button>
@@ -57,43 +51,24 @@ function App() {
               setCurrentView('orders');
               setActiveOrderId(null);
             }}
-            style={{
-              background: currentView === 'orders' ? '#646cff' : 'transparent',
-              color: currentView === 'orders' ? 'white' : '#646cff',
-              border: currentView === 'orders' ? 'none' : '1px solid #646cff',
-            }}
+            className={currentView === 'orders' ? 'primary' : 'outline'}
           >
-            Orders
+            My Orders
           </button>
+          <CartIcon />
         </nav>
       </header>
 
-      <CartIcon />
-
       {isCartOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            right: 0,
-            width: '100%',
-            maxWidth: '400px',
-            height: '100vh',
-            background: 'white',
-            boxShadow: '-4px 0 12px rgba(0,0,0,0.15)',
-            zIndex: 999,
-            overflowY: 'auto',
-            padding: '1rem',
-          }}
-        >
-          <Cart
-            onOrderPlaced={handleOrderPlaced}
-            onClose={() => setCartOpen(false)}
-          />
+        <div className="cart-overlay fade-in">
+          <div className="cart-backdrop" onClick={() => setCartOpen(false)} />
+          <div className="cart-panel slide-in">
+            <Cart onOrderPlaced={handleOrderPlaced} onClose={() => setCartOpen(false)} />
+          </div>
         </div>
       )}
 
-      <main style={{ display: 'grid', gap: '2rem' }}>
+      <main className="container fade-in" style={{ animationDelay: '0.1s' }}>
         {activeOrderId ? (
           <OrderTracker orderId={activeOrderId} onBack={handleBackToOrders} />
         ) : currentView === 'menu' ? (

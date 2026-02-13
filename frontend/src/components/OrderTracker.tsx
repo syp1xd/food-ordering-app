@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ordersApi, sseApi, Order } from '../services/api';
 
 interface OrderTrackerProps {
@@ -7,11 +7,13 @@ interface OrderTrackerProps {
 }
 
 const statusLabels: Record<string, string> = {
-  received: 'Order Received',
+  received: 'Received',
   preparing: 'Preparing',
   out_for_delivery: 'Out for Delivery',
   delivered: 'Delivered',
 };
+
+const steps: Array<Order['status']> = ['received', 'preparing', 'out_for_delivery', 'delivered'];
 
 export const OrderTracker: React.FC<OrderTrackerProps> = ({ orderId, onBack }) => {
   const [order, setOrder] = useState<Order | null>(null);
@@ -19,100 +21,125 @@ export const OrderTracker: React.FC<OrderTrackerProps> = ({ orderId, onBack }) =
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
 
-  const connectSSE = () => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
+  const fetchOrder = async () => {
+    try {
+      const data = await ordersApi.getOne(orderId);
+      setOrder(data);
+    } catch (err) {
+      console.error('Failed to load order:', err);
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const connectSSE = () => {
+    if (eventSourceRef.current) eventSourceRef.current.close();
+
     const es = sseApi.streamOrderStatus(orderId);
     eventSourceRef.current = es;
-    console.log('[SSE] Connecting to stream for order', orderId);
-    es.onopen = () => {
-      console.log('[SSE] Connection opened');
-    };
+
     es.onmessage = (event) => {
-      console.log('[SSE] Message received:', event.data);
       try {
         const data = JSON.parse(event.data);
         if (data.order_id === orderId) {
-          console.log('[SSE] Updating order status to:', data.status);
-          // Merge the new status into existing order to preserve all fields
-          setOrder(prev => prev ? { ...prev, status: data.status } : prev);
+          setOrder((prev) => (prev ? { ...prev, status: data.status } : prev));
         }
       } catch (e) {
         console.error('SSE parse error', e);
       }
     };
-    es.onerror = (err) => {
-      console.error('[SSE] Error, will reconnect in 3s:', err);
+
+    es.onerror = () => {
       es.close();
-      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = window.setTimeout(connectSSE, 3000);
     };
   };
 
   useEffect(() => {
     let mounted = true;
-    const fetchOrder = async () => {
-      try {
-        const data = await ordersApi.getOne(orderId);
-        if (mounted) {
-          setOrder(data);
-          setLoading(false);
-        }
-      } catch (err) {
-        console.error('Failed to load order:', err);
-        if (mounted) setLoading(false);
-      }
+
+    const load = async () => {
+      if (!mounted) return;
+      await fetchOrder();
     };
-    fetchOrder();
+
+    load();
     connectSSE();
 
-    // Polling fallback: refresh order every 5 seconds to ensure updates
-    const pollInterval = setInterval(fetchOrder, 5000);
+    const pollInterval = window.setInterval(fetchOrder, 5000);
 
     return () => {
       mounted = false;
-      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-      }
-      clearInterval(pollInterval);
+      window.clearInterval(pollInterval);
+      if (reconnectTimeoutRef.current) window.clearTimeout(reconnectTimeoutRef.current);
+      if (eventSourceRef.current) eventSourceRef.current.close();
     };
   }, [orderId]);
 
-  if (loading) return <div>Loading order...</div>;
-  if (!order) return <div>Order not found</div>;
+  if (loading) {
+    return (
+      <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
+        <p>Loading order details...</p>
+      </div>
+    );
+  }
+
+  if (!order) {
+    return (
+      <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
+        <p>Order not found</p>
+        <button onClick={onBack} className="primary" style={{ marginTop: '1rem' }}>
+          Back to Orders
+        </button>
+      </div>
+    );
+  }
+
+  const currentStepIndex = steps.indexOf(order.status);
+  const total = order.items.reduce((sum, oi) => sum + oi.menu_item.price * oi.quantity, 0);
 
   return (
     <div className="card">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-        <h2>Order #{order.id}</h2>
-        <button onClick={onBack} style={{ background: 'transparent', border: '1px solid #ccc', cursor: 'pointer' }}>
-          ← Back to Orders
-        </button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
+        <div>
+          <h2 style={{ margin: 0 }}>Order #{order.id}</h2>
+          <p style={{ marginTop: '0.35rem' }}>Track your order in real-time</p>
+        </div>
+        <span className={`status-badge status-${order.status}`}>{statusLabels[order.status]}</span>
       </div>
-      <div>
-        <strong>Status:</strong>{' '}
-        <span className={`status-badge status-${order.status}`}>
-          {statusLabels[order.status]}
-        </span>
-      </div>
-      <h3 style={{ marginTop: '1rem' }}>Items</h3>
-      <ul>
-        {order.items.map(oi => (
-          <li key={oi.id}>
-            {oi.menu_item.name} x {oi.quantity} — ${(oi.menu_item.price * oi.quantity).toFixed(2)}
-          </li>
+
+      <div className="stepper">
+        {steps.map((step, idx) => (
+          <div
+            key={step}
+            className={`step ${idx === currentStepIndex ? 'active' : ''} ${idx < currentStepIndex ? 'completed' : ''}`}
+          >
+            <div className="step-circle">{idx < currentStepIndex ? '✓' : idx + 1}</div>
+            <div className="step-label">{statusLabels[step]}</div>
+          </div>
         ))}
-      </ul>
-      <div style={{ marginTop: '0.8rem', fontWeight: 'bold' }}>
-        Total: ${order.items.reduce((sum, oi) => sum + oi.menu_item.price * oi.quantity, 0).toFixed(2)}
       </div>
-      <div style={{ marginTop: '0.8rem', color: '#666' }}>
-        <div><strong>Name:</strong> {order.customer_name}</div>
-        <div><strong>Address:</strong> {order.address}</div>
-        <div><strong>Phone:</strong> {order.phone}</div>
+
+      <div style={{ display: 'grid', gap: '0.5rem' }}>
+        {order.items.map((oi) => (
+          <div key={oi.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
+            <div>
+              <strong>{oi.menu_item.name}</strong>
+              <div style={{ opacity: 0.75 }}>Qty: {oi.quantity}</div>
+            </div>
+            <div style={{ fontWeight: 700 }}>${(oi.menu_item.price * oi.quantity).toFixed(2)}</div>
+          </div>
+        ))}
       </div>
+
+      <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'space-between', fontWeight: 800 }}>
+        <span>Total</span>
+        <span>${total.toFixed(2)}</span>
+      </div>
+
+      <button onClick={onBack} className="outline" style={{ marginTop: '1.25rem' }}>
+        Back to Orders
+      </button>
     </div>
   );
 };
